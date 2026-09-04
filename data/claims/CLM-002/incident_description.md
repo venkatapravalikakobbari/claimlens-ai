@@ -9,10 +9,9 @@ road accident in Hyderabad, Telangana.
 The customer states that the vehicle was damaged when it
 collided with another vehicle at approximately 8:30 PM.
 
-The customer reports damage to:
-- Front bumper
-- Front bonnet
-- Right headlight
+The visible damage includes:
+- Rear bumper damage
+- Right tail light damage
 
 The customer states that the vehicle was driven by the
 policyholder at the time of the accident.

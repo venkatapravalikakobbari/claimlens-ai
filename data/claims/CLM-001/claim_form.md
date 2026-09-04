@@ -21,6 +21,11 @@ Vehicle Year: 2022
 Incident Date: 01-Sep-2026
 Incident Location: Hyderabad, Telangana
 Incident Type: Road Accident / Collision
+## Driver Information
+
+Driver: Rahul Mehta
+Driving Licence Status: Valid
+Reported Date: 05-Sep-2026
 
 ## Claim Details
 

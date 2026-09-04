@@ -21,6 +21,13 @@ Vehicle Year: 2021
 Incident Date: 28-Aug-2026
 Incident Location: Hyderabad, Telangana
 Incident Type: Road Accident / Collision
+## Driver Information
+
+Driver: Arjun Rao
+
+Driving Licence Status: Valid
+
+Reported Date: 29-Aug-2026
 
 ## Claim Details
 
