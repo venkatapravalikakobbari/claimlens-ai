@@ -109,6 +109,17 @@ Recommend APPROVE only when the supplied evidence is complete, consistent,
 and supports coverage. The human investigator remains the final
 decision-maker.
 
+		The rationale MUST cite evidence explicitly.
+		Cite evidence using the exact supplied source path.
+		Cite policy using the exact supplied POL-XXX clause ID.
+Every material finding must cite at least one supplied claim document source;
+when a policy requirement is involved, also cite the relevant supplied policy
+clause ID. For contradictions, cite both conflicting source documents and the
+relevant policy clause, such as POL-011 or POL-012. For missing information,
+explicitly identify the missing document or field and cite the relevant policy
+clause. Do not invent citations. If evidence is missing, explicitly state that
+it is missing.
+
 Return ONLY valid JSON with exactly this structure and no Markdown fences:
 {{
   "recommendation": "APPROVE | REJECT | REQUEST INFORMATION | ESCALATE TO INVESTIGATOR",
@@ -144,10 +155,14 @@ def generate_investigation_reasoning(
 
 	fallback = (
 		"ESCALATE TO INVESTIGATOR",
-		"The AI reasoning response could not be safely parsed; human investigation is required.",
+		"The AI reasoning service was unavailable or could not be safely processed; human investigation is required.",
 	)
 	try:
 		response = GeminiClient().generate_text(_build_reasoning_prompt(review, documents))
+	except Exception:
+		return fallback
+
+	try:
 		payload = json.loads(response)
 		recommendation = payload.get("recommendation")
 		rationale = payload.get("rationale")
@@ -159,7 +174,7 @@ def generate_investigation_reasoning(
 		):
 			return fallback
 		return recommendation, rationale.strip()
-	except (json.JSONDecodeError, AttributeError, RuntimeError, TypeError, ValueError):
+	except (json.JSONDecodeError, AttributeError, TypeError, ValueError):
 		return fallback
 
 
