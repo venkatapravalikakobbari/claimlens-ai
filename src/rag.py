@@ -1,7 +1,9 @@
 """Local in-memory semantic retrieval for policy clauses."""
 
 from dataclasses import dataclass
+import json
 from math import sqrt
+from pathlib import Path
 
 from src.gemini_client import GeminiClient
 from src.models import PolicyClause
@@ -38,19 +40,66 @@ class PolicyRetriever:
 		self,
 		clauses: list[PolicyClause],
 		gemini_client: GeminiClient,
+		index_path: str | Path | None = None,
 	) -> None:
-		"""Precompute one embedding for every supplied policy clause."""
+		"""Create a retriever, optionally loading or saving a local index."""
 
-		self._embedded_clauses = [
-			_EmbeddedClause(
-				clause=clause,
-				embedding=gemini_client.get_embedding(
-					f"{clause.clause_id}: {clause.title}\n{clause.text}"
-				),
-			)
-			for clause in clauses
-		]
 		self._gemini_client = gemini_client
+		if index_path is not None and Path(index_path).is_file():
+			self._embedded_clauses = self._load_index(index_path)
+		else:
+			self._embedded_clauses = [
+				_EmbeddedClause(
+					clause=clause,
+					embedding=gemini_client.get_embedding(
+						f"{clause.clause_id}: {clause.title}\n{clause.text}"
+					),
+				)
+				for clause in clauses
+			]
+			if index_path is not None:
+				self._save_index(index_path)
+
+	@classmethod
+	def build_or_load_index(
+		cls,
+		clauses: list[PolicyClause],
+		gemini_client: GeminiClient,
+		index_path: str | Path,
+	) -> "PolicyRetriever":
+		"""Load a local policy index or build it with Gemini embeddings."""
+
+		return cls(clauses, gemini_client, index_path=index_path)
+
+	def _save_index(self, index_path: str | Path) -> None:
+		path = Path(index_path)
+		path.parent.mkdir(parents=True, exist_ok=True)
+		payload = [
+			{
+				"clause_id": item.clause.clause_id,
+				"title": item.clause.title,
+				"text": item.clause.text,
+				"embedding": item.embedding,
+			}
+			for item in self._embedded_clauses
+		]
+		path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+	@staticmethod
+	def _load_index(index_path: str | Path) -> list[_EmbeddedClause]:
+		path = Path(index_path)
+		payload = json.loads(path.read_text(encoding="utf-8"))
+		return [
+			_EmbeddedClause(
+				clause=PolicyClause(
+					clause_id=entry["clause_id"],
+					title=entry["title"],
+					text=entry["text"],
+				),
+				embedding=[float(value) for value in entry["embedding"]],
+			)
+			for entry in payload
+		]
 
 	def retrieve(self, query: str, top_k: int = 5) -> list[PolicyClause]:
 		"""Return the most similar policy clauses for a non-empty query."""

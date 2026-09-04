@@ -1,6 +1,7 @@
 """Claim review orchestration for deterministic evidence checks."""
 
 import json
+from pathlib import Path
 
 from src.contradictions import detect_contradictions
 from src.document_loader import load_claim_documents, load_policy_clauses
@@ -82,12 +83,13 @@ def _build_reasoning_prompt(
 	"""Build an evidence-grounded prompt for investigation reasoning."""
 
 	document_text = "\n\n".join(
-		f"Source document: {document.source_path}\n{document.content}"
+		f"Source document: {Path(document.source_path).as_posix()}\n{document.content}"
 		for document in documents
 	)
 	contradiction_text = "\n".join(
 		f"- [{contradiction.severity}] {contradiction.description} "
-		f"(sources: {contradiction.source_a}, {contradiction.source_b})"
+		f"(sources: {Path(contradiction.source_a).as_posix()}, "
+		f"{Path(contradiction.source_b).as_posix()})"
 		for contradiction in review.contradictions
 	) or "- None"
 	clause_text = "\n\n".join(
@@ -159,11 +161,24 @@ def generate_investigation_reasoning(
 	)
 	try:
 		response = GeminiClient().generate_text(_build_reasoning_prompt(review, documents))
-	except Exception:
+	except Exception as error:
+		print(
+			f"Gemini text generation failed: "
+			f"{type(error).__name__}: {error}"
+		)
 		return fallback
 
 	try:
-		payload = json.loads(response)
+		cleaned_response = response.strip()
+		response_lines = cleaned_response.splitlines()
+		if (
+			len(response_lines) >= 2
+			and response_lines[0].strip().lower() in {"```", "```json"}
+			and response_lines[-1].strip() == "```"
+		):
+			cleaned_response = "\n".join(response_lines[1:-1]).strip()
+
+		payload = json.loads(cleaned_response)
 		recommendation = payload.get("recommendation")
 		rationale = payload.get("rationale")
 		if (
@@ -172,9 +187,20 @@ def generate_investigation_reasoning(
 			or type(rationale) is not str
 			or not rationale.strip()
 		):
+			error = ValueError(
+				"response must contain an allowed recommendation and non-empty rationale"
+			)
+			print(
+				f"Gemini reasoning response validation failed: "
+				f"{type(error).__name__}: {error}"
+			)
 			return fallback
 		return recommendation, rationale.strip()
-	except (json.JSONDecodeError, AttributeError, TypeError, ValueError):
+	except (json.JSONDecodeError, AttributeError, TypeError, ValueError) as error:
+		print(
+			f"Gemini reasoning response parsing failed: "
+			f"{type(error).__name__}: {error}"
+		)
 		return fallback
 
 
@@ -187,7 +213,11 @@ def analyze_claim(claim_id: str) -> ClaimReview:
 	contradictions = detect_contradictions(documents)
 	completeness, consistency, policy = _classify_findings(findings)
 	retrieval_query = _build_retrieval_query(documents, findings, contradictions)
-	retriever = PolicyRetriever(clauses, GeminiClient())
+	retriever = PolicyRetriever.build_or_load_index(
+		clauses,
+		GeminiClient(),
+		"data/policy/policy_embeddings.json",
+	)
 	retrieved_policy_clauses = retriever.retrieve(retrieval_query, top_k=5)
 
 	review = ClaimReview(
