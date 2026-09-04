@@ -61,5 +61,6 @@ class ClaimReview:
 	consistency_findings: list[RuleFinding] = field(default_factory=list)
 	policy_findings: list[RuleFinding] = field(default_factory=list)
 	contradictions: list[Contradiction] = field(default_factory=list)
+	retrieved_policy_clauses: list[PolicyClause] = field(default_factory=list)
 	recommendation: str = ""
 	rationale: str = ""
