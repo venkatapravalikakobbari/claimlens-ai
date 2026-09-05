@@ -41,7 +41,7 @@ export function Sidebar() {
 
       <div className="border-t border-sidebar-border px-5 py-4">
         <p className="text-xs text-sidebar-foreground">AI Assistant • Human Decision</p>
-        <p className="mt-1 text-[11px] text-sidebar-foreground/60">Build 2.4.0 · Mock data</p>
+        <p className="mt-1 text-[11px] text-sidebar-foreground/60">Build 2.5.0 - Live backend</p>
       </div>
     </aside>
   );
