@@ -1,6 +1,6 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
-import { ArrowLeft, CheckCircle2, FileText, ShieldAlert, MessageSquareWarning } from "lucide-react";
+import { AlertTriangle, ArrowLeft, CheckCircle2, FileText, ShieldAlert, MessageSquareWarning } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
@@ -13,8 +13,7 @@ import {
   type AdaptedClaim,
   type AdaptedFinding,
 } from "@/lib/claim-adapter";
-import type { FindingStatus } from "@/lib/mock-data";
-import { formatINR } from "@/lib/mock-data";
+import { formatINR, type DecisionStatus, type FindingStatus } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/claims/$claimId")({
   loader: async ({ params }) => {
@@ -336,28 +335,153 @@ function PolicyClauses({ clauses }: { clauses: { clause_id: string; title: strin
   );
 }
 
+type HealthStatus = "PASS" | "ISSUE" | "MISSING" | "UNKNOWN";
+
+function healthFor(findings: AdaptedFinding[]): HealthStatus {
+  if (findings.some((finding) => finding.status === "MISSING")) return "MISSING";
+  if (findings.some((finding) => finding.status === "FAIL")) return "ISSUE";
+  if (
+    findings.some((finding) =>
+      ["UNKNOWN", "NOT_APPLICABLE", "APPLICABLE"].includes(finding.status),
+    )
+  ) {
+    return "UNKNOWN";
+  }
+  return findings.length > 0 ? "PASS" : "UNKNOWN";
+}
+
+function priorityFor(claim: AdaptedClaim): "HIGH" | "MEDIUM" | "LOW" {
+  if (claim.contradictions.some((contradiction) => contradiction.severity === "HIGH")) {
+    return "HIGH";
+  }
+  if (
+    [...claim.completeness, ...claim.consistency, ...claim.policy].some(
+      (finding) => finding.status === "MISSING" || finding.status === "FAIL",
+    )
+  ) {
+    return "MEDIUM";
+  }
+  return "LOW";
+}
+
+function HealthBadge({ status }: { status: HealthStatus }) {
+  const classes: Record<HealthStatus, string> = {
+    PASS: "bg-success-soft text-success border-success/25",
+    ISSUE: "bg-danger-soft text-danger border-danger/25",
+    MISSING: "bg-warning-soft text-warning border-warning/25",
+    UNKNOWN: "bg-neutral-soft text-muted-foreground border-border",
+  };
+  return (
+    <span className={`inline-flex items-center rounded border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${classes[status]}`}>
+      {status}
+    </span>
+  );
+}
+
+function attentionReasons(claim: AdaptedClaim): string[] {
+  const reasons: string[] = [];
+  const highContradictions = claim.contradictions.filter((contradiction) => contradiction.severity === "HIGH");
+  const missingFindings = [...claim.completeness, ...claim.consistency, ...claim.policy].filter(
+    (finding) => finding.status === "MISSING",
+  );
+  const failedFindings = [...claim.completeness, ...claim.consistency, ...claim.policy].filter(
+    (finding) => finding.status === "FAIL",
+  );
+
+  highContradictions.forEach((contradiction) => reasons.push(contradiction.conflict));
+  missingFindings.forEach((finding) => reasons.push(finding.detail));
+  failedFindings.forEach((finding) => reasons.push(finding.detail));
+
+  return reasons.length > 0 ? reasons.slice(0, 3) : ["No material issues detected in the returned evidence."];
+}
+
+function ClaimCommandCenter({ claim }: { claim: AdaptedClaim }) {
+  const priority = priorityFor(claim);
+  const reasons = attentionReasons(claim);
+  const health = [
+    { label: "Completeness", status: healthFor(claim.completeness) },
+    { label: "Consistency", status: healthFor(claim.consistency) },
+    { label: "Policy analysis", status: healthFor(claim.policy) },
+  ];
+
+  return (
+    <div className="space-y-4">
+      <Link to="/claims" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
+        <ArrowLeft className="size-4" /> Back to claims
+      </Link>
+
+      <section className="rounded-xl border border-border bg-card p-5 shadow-sm md:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-5">
+          <div>
+            <p className="font-mono text-xs font-semibold uppercase tracking-wide text-muted-foreground">{claim.id}</p>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+              {claim.customer || "Claim review"}
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {claim.vehicle || "Vehicle unavailable from API"}
+              {claim.registration ? ` · ${claim.registration}` : ""}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">AI recommendation</span>
+            <DecisionStatus status={claim.status} />
+          </div>
+        </div>
+
+        <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {[
+            ["Claim amount", claim.amount == null ? "Unavailable" : formatINR(claim.amount)],
+            ["Incident type", claim.incidentType || "Unavailable"],
+            ["Incident date", claim.incidentDate || "Unavailable"],
+            ["Location", claim.location || "Unavailable"],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-md border border-border bg-muted/30 px-3 py-2.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+              <p className="mt-1 text-sm font-medium text-foreground">{value}</p>
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-[auto_1fr]">
+          <div className="rounded-lg border border-border bg-muted/20 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Review priority</p>
+            <div className="mt-2 flex items-center gap-2">
+              <AlertTriangle className="size-4 text-warning" />
+              <span className="text-xl font-semibold text-foreground">{priority}</span>
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">Derived from returned contradictions and findings.</p>
+          </div>
+          <div className="rounded-lg border border-border bg-muted/20 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Why this claim needs attention</p>
+            <ul className="mt-2 space-y-1.5 text-sm text-foreground">
+              {reasons.map((reason) => <li key={reason} className="flex gap-2"><span className="text-muted-foreground">•</span>{reason}</li>)}
+            </ul>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+          {health.map((item) => (
+            <div key={item.label} className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
+              <span className="text-sm text-muted-foreground">{item.label}</span>
+              <HealthBadge status={item.status} />
+            </div>
+          ))}
+          <div className="flex items-center justify-between gap-2 rounded-md border border-border px-3 py-2">
+            <span className="text-sm text-muted-foreground">Contradictions</span>
+            <span className="text-sm font-semibold text-foreground">{claim.contradictions.length}</span>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ClaimReview() {
   const { claim, policyClauses } = Route.useLoaderData();
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
-      <div className="space-y-4">
-        <Link to="/claims" className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground">
-          <ArrowLeft className="size-4" /> Back to claims
-        </Link>
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <p className="font-mono text-xs font-medium text-muted-foreground">{claim.id}</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
-              {claim.customer || "Claim review"}
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              {claim.vehicle || "Vehicle unavailable from API"}
-            </p>
-          </div>
-          <div className="mt-1"><DecisionStatus status={claim.status} /></div>
-        </div>
-      </div>
+      <ClaimCommandCenter claim={claim} />
 
       <Section step={1} title="Claim Overview">
         <Overview claim={claim} />
