@@ -14,6 +14,27 @@ class ClaimDocument:
 
 
 @dataclass
+class ClaimMetadata:
+	"""Deterministic metadata extracted from claim documents."""
+
+	claim_id: str | None = None
+	policy_number: str | None = None
+	customer_name: str | None = None
+	vehicle_make: str | None = None
+	vehicle_model: str | None = None
+	vehicle_year: int | None = None
+	registration_number: str | None = None
+	incident_date: str | None = None
+	incident_location: str | None = None
+	incident_type: str | None = None
+	driver: str | None = None
+	driving_licence_status: str | None = None
+	reported_date: str | None = None
+	claim_amount: int | None = None
+	reported_damage: list[str] | None = None
+
+
+@dataclass
 class EvidenceItem:
 	"""A factual statement extracted from a claim document."""
 
@@ -64,3 +85,4 @@ class ClaimReview:
 	retrieved_policy_clauses: list[PolicyClause] = field(default_factory=list)
 	recommendation: str = ""
 	rationale: str = ""
+	claim_metadata: ClaimMetadata | None = None

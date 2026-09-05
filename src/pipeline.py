@@ -6,6 +6,7 @@ from pathlib import Path
 from src.contradictions import detect_contradictions
 from src.document_loader import load_claim_documents, load_policy_clauses
 from src.gemini_client import GeminiClient
+from src.metadata import extract_claim_metadata
 from src.models import ClaimDocument, ClaimReview, Contradiction, RuleFinding
 from src.rag import PolicyRetriever
 from src.rules import check_policy_clause_applicability
@@ -208,6 +209,7 @@ def analyze_claim(claim_id: str) -> ClaimReview:
 	"""Run the deterministic evidence review for a claim."""
 
 	documents = load_claim_documents("data/claims", claim_id)
+	claim_metadata = extract_claim_metadata(documents)
 	clauses = load_policy_clauses("data/policy/motor_insurance_policy.md")
 	findings = check_policy_clause_applicability(documents, clauses)
 	contradictions = detect_contradictions(documents)
@@ -222,6 +224,7 @@ def analyze_claim(claim_id: str) -> ClaimReview:
 
 	review = ClaimReview(
 		claim_id=claim_id,
+		claim_metadata=claim_metadata,
 		completeness_findings=completeness,
 		consistency_findings=consistency,
 		policy_findings=policy,
