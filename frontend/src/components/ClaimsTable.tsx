@@ -1,9 +1,9 @@
 import { Link } from "@tanstack/react-router";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatINR, type Claim } from "@/lib/mock-data";
+import type { AdaptedClaim } from "@/lib/claim-adapter";
 
-export function ClaimsTable({ claims, caption }: { claims: Claim[]; caption?: string }) {
+export function ClaimsTable({ claims, caption }: { claims: AdaptedClaim[]; caption?: string }) {
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-card">
       <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-4">
@@ -32,15 +32,15 @@ export function ClaimsTable({ claims, caption }: { claims: Claim[]; caption?: st
               <tr key={claim.id} className="border-b border-border last:border-0 hover:bg-muted/40">
                 <td className="px-5 py-4 font-mono text-[13px] font-medium text-foreground">{claim.id}</td>
                 <td className="px-5 py-4">
-                  <div className="font-medium text-foreground">{claim.customer}</div>
-                  <div className="text-xs text-muted-foreground">{claim.policyNumber}</div>
+                  <div className="font-medium text-foreground">{claim.customer || "Unavailable from API"}</div>
+                  <div className="text-xs text-muted-foreground">{claim.policyNumber || "Policy number unavailable"}</div>
                 </td>
                 <td className="px-5 py-4">
-                  <div className="text-foreground">{claim.vehicle}</div>
-                  <div className="text-xs text-muted-foreground">{claim.registration}</div>
+                  <div className="text-foreground">{claim.vehicle || "Unavailable from API"}</div>
+                  <div className="text-xs text-muted-foreground">{claim.registration || "Registration unavailable"}</div>
                 </td>
                 <td className="px-5 py-4 text-right font-medium tabular-nums text-foreground">
-                  {formatINR(claim.amount)}
+                  Unavailable from API
                 </td>
                 <td className="px-5 py-4">
                   <StatusBadge status={claim.status} kind="decision" />

@@ -11,7 +11,7 @@ const toneClass: Record<Tone, string> = {
   neutral: "bg-neutral-soft text-muted-foreground border-border",
 };
 
-const findingTone: Record<FindingStatus, Tone> = {
+const findingTone: Record<string, Tone> = {
   PASS: "success",
   FAIL: "danger",
   MISSING: "warning",
@@ -19,13 +19,13 @@ const findingTone: Record<FindingStatus, Tone> = {
   ESCALATE: "info",
 };
 
-const decisionTone: Record<DecisionStatus, Tone> = {
+const decisionTone: Record<string, Tone> = {
   APPROVE: "success",
   "ESCALATE TO INVESTIGATOR": "danger",
   "REQUEST INFORMATION": "warning",
 };
 
-const severityTone: Record<Severity, Tone> = {
+const severityTone: Record<string, Tone> = {
   HIGH: "danger",
   MEDIUM: "warning",
   LOW: "neutral",
@@ -36,16 +36,16 @@ export function StatusBadge({
   kind = "finding",
   className,
 }: {
-  status: FindingStatus | DecisionStatus | Severity;
+  status: string;
   kind?: "finding" | "decision" | "severity";
   className?: string;
 }) {
   const tone: Tone =
     kind === "decision"
-      ? decisionTone[status as DecisionStatus]
+      ? decisionTone[status] ?? "neutral"
       : kind === "severity"
-        ? severityTone[status as Severity]
-        : findingTone[status as FindingStatus];
+        ? severityTone[status] ?? "neutral"
+        : findingTone[status] ?? "neutral";
 
   return (
     <span

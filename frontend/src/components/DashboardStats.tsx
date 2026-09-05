@@ -16,9 +16,9 @@ export function DashboardStats({
   escalated,
 }: {
   total: number;
-  pending: number;
-  needsInfo: number;
-  escalated: number;
+  pending?: number;
+  needsInfo?: number;
+  escalated?: number;
 }) {
   const stats: Stat[] = [
     { label: "Total Claims", value: total, icon: ClipboardList, accent: "text-info bg-info-soft", note: "In the current review cycle" },
@@ -34,7 +34,7 @@ export function DashboardStats({
           <div className="flex items-start justify-between gap-3">
             <div>
               <p className="text-sm font-medium text-muted-foreground">{s.label}</p>
-              <p className="mt-2 text-3xl font-semibold tabular-nums text-foreground">{s.value}</p>
+              <p className="mt-2 text-3xl font-semibold tabular-nums text-foreground">{s.value ?? "—"}</p>
             </div>
             <span className={cn("flex size-9 items-center justify-center rounded-md", s.accent)}>
               <s.icon className="size-4.5" />

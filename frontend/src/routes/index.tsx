@@ -1,7 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { Button } from "@/components/ui/button";
 import { ClaimsTable } from "@/components/ClaimsTable";
 import { DashboardStats } from "@/components/DashboardStats";
-import { claims, dashboardStats } from "@/lib/mock-data";
+import { loadClaimsSnapshot } from "@/lib/claims-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -20,10 +21,39 @@ export const Route = createFileRoute("/")({
       },
     ],
   }),
+  loader: loadClaimsSnapshot,
   component: Dashboard,
+  pendingComponent: DashboardPending,
+  errorComponent: DashboardError,
 });
 
+function DashboardPending() {
+  return <RouteMessage detail="Loading claims from the backend." />;
+}
+
+function DashboardError({ error, reset }: { error: Error; reset: () => void }) {
+  return <RouteMessage detail={error.message || "Unable to load claims from the backend."} action={<Button onClick={reset}>Try again</Button>} />;
+}
+
+function RouteMessage({ detail, action }: { detail: string; action?: React.ReactNode }) {
+  return (
+    <div className="mx-auto flex min-h-[32rem] max-w-xl items-center justify-center px-4">
+      <div className="w-full rounded-lg border border-border bg-card p-6 text-center">
+        <h1 className="text-lg font-semibold text-foreground">Claims unavailable</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
+        {action ? <div className="mt-5">{action}</div> : null}
+      </div>
+    </div>
+  );
+}
+
 function Dashboard() {
+  const { claims } = Route.useLoaderData();
+  const needsInfo = claims.filter((claim) => claim.recommendation.decision === "REQUEST INFORMATION").length;
+  const escalated = claims.filter((claim) =>
+    claim.recommendation.decision === "ESCALATE TO INVESTIGATOR" || claim.recommendation.decision === "REJECT",
+  ).length;
+
   return (
     <div className="mx-auto max-w-7xl space-y-6">
       <div>
@@ -33,9 +63,13 @@ function Dashboard() {
         </p>
       </div>
 
-      <DashboardStats {...dashboardStats} />
+      <DashboardStats total={claims.length} needsInfo={needsInfo} escalated={escalated} />
 
-      <ClaimsTable claims={claims} />
+      {claims.length === 0 ? (
+        <div className="rounded-lg border border-border bg-card px-5 py-6 text-sm text-muted-foreground">
+          No claims are available from the backend.
+        </div>
+      ) : <ClaimsTable claims={claims} />}
     </div>
   );
 }
