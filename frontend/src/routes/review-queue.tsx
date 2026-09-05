@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ClaimsTable } from "@/components/ClaimsTable";
 import { FindingCard } from "@/components/FindingCard";
-import { loadClaimsSnapshot } from "@/lib/claims-data";
+import { getClaimIds, getClaimReview } from "@/lib/api";
+import { adaptClaimReview, type AdaptedClaim } from "@/lib/claim-adapter";
 
 export const Route = createFileRoute("/review-queue")({
   head: () => ({
@@ -13,7 +15,7 @@ export const Route = createFileRoute("/review-queue")({
       { property: "og:description", content: "Claims awaiting investigator action, prioritised by contradiction severity." },
     ],
   }),
-  loader: loadClaimsSnapshot,
+  loader: getClaimIds,
   component: ReviewQueue,
   pendingComponent: QueuePending,
   errorComponent: QueueError,
@@ -40,11 +42,51 @@ function RouteMessage({ detail, action }: { detail: string; action?: React.React
 }
 
 function ReviewQueue() {
-  const { claims } = Route.useLoaderData();
+  const { claims: claimIds } = Route.useLoaderData();
+  const [claims, setClaims] = useState<AdaptedClaim[]>([]);
+  const [loadingReviews, setLoadingReviews] = useState(true);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadReviews() {
+      setLoadingReviews(true);
+      setReviewError(null);
+      try {
+        const reviews: AdaptedClaim[] = [];
+        for (const claimId of claimIds) {
+          const review = await getClaimReview(claimId);
+          reviews.push(adaptClaimReview(review));
+        }
+        if (!cancelled) setClaims(reviews);
+      } catch (error) {
+        if (!cancelled) {
+          setReviewError(error instanceof Error ? error.message : "Unable to load review data from the backend.");
+        }
+      } finally {
+        if (!cancelled) setLoadingReviews(false);
+      }
+    }
+
+    void loadReviews();
+    return () => {
+      cancelled = true;
+    };
+  }, [claimIds]);
+
+  if (loadingReviews) {
+    return <RouteMessage detail={`Loading review data for ${claimIds.length} claim${claimIds.length === 1 ? "" : "s"} from the backend.`} />;
+  }
+
+  if (reviewError) {
+    return <RouteMessage detail={reviewError} action={<Button onClick={() => window.location.reload()}>Try again</Button>} />;
+  }
+
   const queue = [...claims].sort((a, b) => b.contradictions.length - a.contradictions.length);
   const blocking = claims.flatMap((c) =>
     [...c.completeness, ...c.consistency, ...c.policy]
-      .filter((f) => f.status !== "PASS")
+      .filter((f) => f.status === "FAIL" || f.status === "MISSING")
       .map((f) => ({ ...f, id: `${c.id}-${f.id}`, title: `${c.id} · ${f.title}` })),
   );
 
