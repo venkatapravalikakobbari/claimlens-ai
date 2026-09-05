@@ -1,8 +1,8 @@
 import { FileText, GitCompareArrows } from "lucide-react";
 import { StatusBadge } from "@/components/StatusBadge";
-import type { Contradiction } from "@/lib/mock-data";
+import type { AdaptedContradiction } from "@/lib/claim-adapter";
 
-export function ContradictionCard({ contradiction }: { contradiction: Contradiction }) {
+export function ContradictionCard({ contradiction }: { contradiction: AdaptedContradiction }) {
   return (
     <div className="rounded-md border border-border bg-card">
       <div className="flex flex-wrap items-start justify-between gap-2 border-b border-border px-4 py-3">
@@ -26,9 +26,15 @@ export function ContradictionCard({ contradiction }: { contradiction: Contradict
               <FileText className="size-3.5 text-muted-foreground" />
               {doc.name}
             </p>
-            <blockquote className="mt-2 border-l-2 border-border pl-3 text-sm text-muted-foreground">
-              “{doc.excerpt}”
-            </blockquote>
+            {doc.excerpt ? (
+              <blockquote className="mt-2 whitespace-pre-wrap border-l-2 border-border pl-3 text-sm text-muted-foreground">
+                {doc.excerpt}
+              </blockquote>
+            ) : (
+              <p className="mt-2 border-l-2 border-border pl-3 text-sm text-muted-foreground">
+                Evidence text unavailable from API.
+              </p>
+            )}
           </div>
         ))}
       </div>

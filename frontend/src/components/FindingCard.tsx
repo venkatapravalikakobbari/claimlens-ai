@@ -21,8 +21,23 @@ export function FindingCard({ finding }: { finding: AdaptedFinding }) {
         </div>
         <p className="mt-1.5 text-sm text-muted-foreground">{finding.detail}</p>
         <p className="mt-2 text-xs text-muted-foreground">
-          Source: <span className="text-foreground/80">{finding.source}</span>
+          Source: <span className="text-foreground/80">{finding.source || "Unavailable from API"}</span>
         </p>
+        {finding.evidence.length > 0 ? (
+          <div className="mt-3 border-t border-border pt-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Evidence</p>
+            <div className="mt-2 space-y-2">
+              {finding.evidence.map((item, index) => (
+                <div key={`${item.sourceDocument}-${index}`} className="rounded border border-border bg-muted/30 px-3 py-2">
+                  <p className="text-sm text-foreground">{item.statement}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {item.sourceDocument} · {item.evidenceType}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

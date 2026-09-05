@@ -3,6 +3,7 @@ import type {
   ClaimMetadata,
   ClaimReview,
   Contradiction as ApiContradiction,
+  EvidenceItem,
   RuleFinding,
 } from "./api-types";
 
@@ -11,6 +12,13 @@ export type AdaptedDecisionStatus = DecisionStatus | "REJECT";
 
 export type AdaptedFinding = Omit<Finding, "status"> & {
   status: AdaptedFindingStatus;
+  evidence: AdaptedEvidence[];
+};
+
+export type AdaptedEvidence = {
+  statement: string;
+  sourceDocument: string;
+  evidenceType: string;
 };
 
 export type AdaptedContradiction = {
@@ -19,6 +27,11 @@ export type AdaptedContradiction = {
   documentA: { name: string; excerpt: string };
   documentB: { name: string; excerpt: string };
   severity: string;
+};
+
+export type AdaptedDocument = {
+  id: string;
+  sourcePath: string;
 };
 
 export type AdaptedClaim = Omit<
@@ -38,6 +51,7 @@ export type AdaptedClaim = Omit<
   | "policy"
   | "contradictions"
   | "recommendation"
+  | "documents"
 > & {
   amount: number | null;
   customer: string;
@@ -53,6 +67,7 @@ export type AdaptedClaim = Omit<
   driver: string;
   drivingLicenceStatus: string;
   reportedDamage: string[];
+  documents: AdaptedDocument[];
   status: AdaptedDecisionStatus | string;
   completeness: AdaptedFinding[];
   consistency: AdaptedFinding[];
@@ -95,6 +110,14 @@ function mapDecisionStatus(status: string): AdaptedDecisionStatus | string {
     : status;
 }
 
+function adaptEvidence(item: EvidenceItem): AdaptedEvidence {
+  return {
+    statement: item.statement,
+    sourceDocument: item.source_document,
+    evidenceType: item.evidence_type,
+  };
+}
+
 function sourceFor(finding: RuleFinding): string {
   return finding.evidence.map((item) => item.source_document).join("; ");
 }
@@ -106,18 +129,24 @@ function adaptFinding(finding: RuleFinding): AdaptedFinding {
     status: mapFindingStatus(finding.status),
     detail: finding.description,
     source: sourceFor(finding),
+    evidence: finding.evidence.map(adaptEvidence),
   };
 }
 
 function adaptContradiction(
   contradiction: ApiContradiction,
   index: number,
+  evidence: AdaptedEvidence[],
 ): AdaptedContradiction {
+  const evidenceFor = (sourcePath: string) =>
+    evidence
+      .filter((item) => item.sourceDocument === sourcePath)
+      .map((item) => item.statement);
   return {
     id: `contradiction-${index + 1}`,
     conflict: contradiction.description,
-    documentA: { name: contradiction.source_a, excerpt: "" },
-    documentB: { name: contradiction.source_b, excerpt: "" },
+    documentA: { name: contradiction.source_a, excerpt: evidenceFor(contradiction.source_a).join("\n") },
+    documentB: { name: contradiction.source_b, excerpt: evidenceFor(contradiction.source_b).join("\n") },
     severity: contradiction.severity,
   };
 }
@@ -132,6 +161,19 @@ export function adaptClaimReview(review: ClaimReview): AdaptedClaim {
   const decision = mapDecisionStatus(review.recommendation);
   const metadata = review.claim_metadata;
   const reportedDamage = metadata?.reported_damage ?? [];
+  const allFindings = [
+    ...review.completeness_findings,
+    ...review.consistency_findings,
+    ...review.policy_findings,
+  ];
+  const allEvidence = allFindings.flatMap((finding) => finding.evidence.map(adaptEvidence));
+  const documents = [...new Set(allEvidence.map((item) => item.sourceDocument))].map((sourcePath) => ({
+    id: sourcePath,
+    sourcePath,
+  }));
+  const completeness = review.completeness_findings.map(adaptFinding);
+  const consistency = review.consistency_findings.map(adaptFinding);
+  const policy = review.policy_findings.map(adaptFinding);
   return {
     id: review.claim_id,
     customer: metadata?.customer_name ?? "",
@@ -151,11 +193,13 @@ export function adaptClaimReview(review: ClaimReview): AdaptedClaim {
     reportedDamage,
     surveyor: "",
     garage: "",
-    documents: [],
-    completeness: review.completeness_findings.map(adaptFinding),
-    consistency: review.consistency_findings.map(adaptFinding),
-    policy: review.policy_findings.map(adaptFinding),
-    contradictions: review.contradictions.map(adaptContradiction),
+    documents,
+    completeness,
+    consistency,
+    policy,
+    contradictions: review.contradictions.map((contradiction, index) =>
+      adaptContradiction(contradiction, index, allEvidence),
+    ),
     recommendation: {
       decision,
       rationale: review.rationale,

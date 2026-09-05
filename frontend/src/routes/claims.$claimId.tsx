@@ -369,35 +369,17 @@ function ClaimReview() {
             Document metadata is unavailable from the review API.
           </div>
         ) : <div className="overflow-hidden rounded-lg border border-border bg-card">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/60 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <th className="px-4 py-3">Document</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Pages / files</th>
-                <th className="px-4 py-3">Received</th>
-                <th className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {claim.documents.map((d) => (
-                <tr key={d.id} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3">
-                    <span className="flex items-center gap-2 font-medium text-foreground">
-                      <FileText className="size-3.5 text-muted-foreground" />
-                      {d.name}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground">{d.type}</td>
-                  <td className="px-4 py-3 tabular-nums text-muted-foreground">{d.pages || "—"}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{d.received}</td>
-                  <td className="px-4 py-3">
-                    <StatusBadge status={d.status} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="border-b border-border bg-muted/60 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            Submitted evidence sources
+          </div>
+          <ul className="divide-y divide-border">
+            {claim.documents.map((document) => (
+              <li key={document.id} className="flex items-center gap-2 px-4 py-3 text-sm text-foreground">
+                <FileText className="size-3.5 text-muted-foreground" />
+                <span className="font-mono text-xs">{document.sourcePath}</span>
+              </li>
+            ))}
+          </ul>
         </div>}
       </Section>
 
