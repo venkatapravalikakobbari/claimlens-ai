@@ -6,23 +6,36 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { ContradictionCard } from "@/components/ContradictionCard";
 import { FindingCard } from "@/components/FindingCard";
-import { RecommendationCard } from "@/components/RecommendationCard";
 import { StatusBadge } from "@/components/StatusBadge";
-import { formatINR, getClaim, type Claim, type DecisionStatus } from "@/lib/mock-data";
+import { ApiError, getClaimReview } from "@/lib/api";
+import {
+  adaptClaimReview,
+  type AdaptedClaim,
+  type AdaptedFinding,
+} from "@/lib/claim-adapter";
+import type { FindingStatus } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/claims/$claimId")({
-  loader: ({ params }) => {
-    const claim = getClaim(params.claimId);
-    if (!claim) throw notFound();
-    return { claim };
+  loader: async ({ params }) => {
+    try {
+      const review = await getClaimReview(params.claimId);
+      return { claim: adaptClaimReview(review), policyClauses: review.retrieved_policy_clauses };
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404) {
+        throw notFound();
+      }
+      throw error;
+    }
   },
   head: ({ loaderData }) => {
     if (!loaderData) {
       return { meta: [{ title: "Claim unavailable — ClaimLens AI" }, { name: "robots", content: "noindex" }] };
     }
     const { claim } = loaderData;
-    const title = `${claim.id} · ${claim.customer} — ClaimLens AI`;
-    const description = `Evidence review for ${claim.id}: ${claim.vehicle}, ${formatINR(claim.amount)} claimed.`;
+    const title = claim.customer
+      ? `${claim.id} · ${claim.customer} — ClaimLens AI`
+      : `${claim.id} — ClaimLens AI`;
+    const description = `Evidence review for ${claim.id}.`;
     return {
       meta: [
         { title },
@@ -33,7 +46,58 @@ export const Route = createFileRoute("/claims/$claimId")({
     };
   },
   component: ClaimReview,
+  pendingComponent: ClaimReviewPending,
+  errorComponent: ClaimReviewError,
+  notFoundComponent: ClaimNotFound,
 });
+
+function ClaimReviewPending() {
+  return <RouteMessage title="Loading claim review" detail="Retrieving the latest evidence review from ClaimLens AI." />;
+}
+
+function ClaimReviewError({ error, reset }: { error: Error; reset: () => void }) {
+  return (
+    <RouteMessage
+      title="Unable to load claim review"
+      detail={error.message || "The claim review API returned an unexpected error."}
+      action={<Button onClick={reset}>Try again</Button>}
+    />
+  );
+}
+
+function ClaimNotFound() {
+  return (
+    <RouteMessage
+      title="Claim not found"
+      detail="The requested claim is not available in the backend claim register."
+      action={
+        <Button asChild variant="outline">
+          <Link to="/claims">Back to claims</Link>
+        </Button>
+      }
+    />
+  );
+}
+
+function RouteMessage({
+  title,
+  detail,
+  action,
+}: {
+  title: string;
+  detail: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="mx-auto flex min-h-[32rem] max-w-xl items-center justify-center px-4">
+      <div className="w-full rounded-lg border border-border bg-card p-6 text-center">
+        <h1 className="text-lg font-semibold text-foreground">{title}</h1>
+        <p className="mt-2 text-sm text-muted-foreground">{detail}</p>
+        {action ? <div className="mt-5">{action}</div> : null}
+      </div>
+    </div>
+  );
+}
 
 function Section({
   step,
@@ -62,16 +126,16 @@ function Section({
   );
 }
 
-function Overview({ claim }: { claim: Claim }) {
+function Overview({ claim }: { claim: AdaptedClaim }) {
   const rows: [string, string][] = [
-    ["Policy number", claim.policyNumber],
-    ["Vehicle", `${claim.vehicle} · ${claim.registration}`],
-    ["Claim amount", formatINR(claim.amount)],
-    ["Incident date", claim.incidentDate],
-    ["Reported date", claim.reportedDate],
-    ["Loss location", claim.location],
-    ["Surveyor", claim.surveyor],
-    ["Repair garage", claim.garage],
+    ["Policy number", claim.policyNumber || "Unavailable from API"],
+    ["Vehicle", claim.vehicle ? `${claim.vehicle} · ${claim.registration}` : "Unavailable from API"],
+    ["Claim amount", "Unavailable from API"],
+    ["Incident date", claim.incidentDate || "Unavailable from API"],
+    ["Reported date", claim.reportedDate || "Unavailable from API"],
+    ["Loss location", claim.location || "Unavailable from API"],
+    ["Surveyor", claim.surveyor || "Unavailable from API"],
+    ["Repair garage", claim.garage || "Unavailable from API"],
   ];
   return (
     <div className="rounded-lg border border-border bg-card">
@@ -85,13 +149,15 @@ function Overview({ claim }: { claim: Claim }) {
       </dl>
       <div className="border-t border-border px-4 py-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Incident summary</p>
-        <p className="mt-1.5 text-sm leading-relaxed text-foreground">{claim.incidentSummary}</p>
+        <p className="mt-1.5 text-sm leading-relaxed text-foreground">
+          {claim.incidentSummary || "Unavailable from API"}
+        </p>
       </div>
     </div>
   );
 }
 
-function DecisionPanel({ claim }: { claim: Claim }) {
+function DecisionPanel({ claim }: { claim: AdaptedClaim }) {
   const [decision, setDecision] = useState<DecisionStatus | null>(null);
   const [notes, setNotes] = useState("");
 
@@ -160,8 +226,110 @@ function DecisionPanel({ claim }: { claim: Claim }) {
   );
 }
 
+const supportedFindingStatuses = new Set<FindingStatus>([
+  "PASS",
+  "FAIL",
+  "MISSING",
+  "UNKNOWN",
+  "ESCALATE",
+]);
+
+function FindingSection({ finding }: { finding: AdaptedFinding }) {
+  if (supportedFindingStatuses.has(finding.status as FindingStatus)) {
+    return <FindingCard finding={{ ...finding, status: finding.status as FindingStatus }} />;
+  }
+
+  return (
+    <div className="overflow-hidden rounded-md border border-border bg-card">
+      <div className="p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <h4 className="text-sm font-semibold text-foreground">{finding.title}</h4>
+          <span className="rounded border border-border bg-neutral-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+            {finding.status}
+          </span>
+        </div>
+        <p className="mt-1.5 text-sm text-muted-foreground">{finding.detail}</p>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Source: <span className="text-foreground/80">{finding.source || "Unavailable from API"}</span>
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function DecisionStatus({ status }: { status: string }) {
+  if (["APPROVE", "REQUEST INFORMATION", "ESCALATE TO INVESTIGATOR"].includes(status)) {
+    return <StatusBadge status={status as "APPROVE" | "REQUEST INFORMATION" | "ESCALATE TO INVESTIGATOR"} kind="decision" />;
+  }
+  return (
+    <span className="rounded border border-border bg-neutral-soft px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+      {status || "Unavailable"}
+    </span>
+  );
+}
+
+function Recommendation({ claim }: { claim: AdaptedClaim }) {
+  return (
+    <div className="rounded-lg border-2 border-primary/30 bg-info-soft">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-primary/20 px-5 py-4">
+        <div>
+          <h3 className="text-sm font-semibold text-foreground">AI Recommendation</h3>
+          <p className="text-xs text-muted-foreground">Evidence-grounded, generated from submitted documents</p>
+        </div>
+        <div className="flex items-center gap-3">
+          {claim.recommendation.confidence !== undefined ? (
+            <span className="text-xs text-muted-foreground">
+              Confidence <span className="font-semibold text-foreground tabular-nums">{claim.recommendation.confidence}%</span>
+            </span>
+          ) : null}
+          <DecisionStatus status={claim.recommendation.decision} />
+        </div>
+      </div>
+      <div className="space-y-5 px-5 py-5">
+        <p className="text-sm leading-relaxed text-foreground">{claim.recommendation.rationale}</p>
+        {claim.recommendation.evidence.length > 0 ? (
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Supporting evidence</h4>
+            <ul className="mt-2 space-y-1.5 text-sm text-foreground">
+              {claim.recommendation.evidence.map((evidence) => <li key={evidence}>{evidence}</li>)}
+            </ul>
+          </div>
+        ) : null}
+        {claim.recommendation.nextSteps.length > 0 ? (
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Suggested next steps</h4>
+            <ul className="mt-2 space-y-1.5 text-sm text-foreground">
+              {claim.recommendation.nextSteps.map((step) => <li key={step}>{step}</li>)}
+            </ul>
+          </div>
+        ) : null}
+        <p className="rounded-md border border-primary/25 bg-card px-4 py-3 text-sm font-medium text-foreground">
+          AI recommendation — Final decision remains with the investigator.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function PolicyClauses({ clauses }: { clauses: { clause_id: string; title: string; text: string }[] }) {
+  if (clauses.length === 0) return null;
+  return (
+    <div className="mt-4 rounded-md border border-border bg-card p-4">
+      <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Retrieved policy clauses</h3>
+      <div className="mt-3 space-y-3">
+        {clauses.map((clause) => (
+          <div key={clause.clause_id}>
+            <p className="text-sm font-medium text-foreground">{clause.clause_id} · {clause.title}</p>
+            <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">{clause.text}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function ClaimReview() {
-  const { claim } = Route.useLoaderData();
+  const { claim, policyClauses } = Route.useLoaderData();
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -172,12 +340,14 @@ function ClaimReview() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="font-mono text-xs font-medium text-muted-foreground">{claim.id}</p>
-            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">{claim.customer}</h1>
+            <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground">
+              {claim.customer || "Claim review"}
+            </h1>
             <p className="text-sm text-muted-foreground">
-              {claim.vehicle} · {claim.registration} · {formatINR(claim.amount)} claimed
+              {claim.vehicle || "Vehicle unavailable from API"}
             </p>
           </div>
-          <StatusBadge status={claim.status} kind="decision" className="mt-1" />
+          <div className="mt-1"><DecisionStatus status={claim.status} /></div>
         </div>
       </div>
 
@@ -186,7 +356,11 @@ function ClaimReview() {
       </Section>
 
       <Section step={2} title="Document Evidence" description="Documents on file and their intake status.">
-        <div className="overflow-hidden rounded-lg border border-border bg-card">
+        {claim.documents.length === 0 ? (
+          <div className="rounded-md border border-border bg-card px-4 py-5 text-sm text-muted-foreground">
+            Document metadata is unavailable from the review API.
+          </div>
+        ) : <div className="overflow-hidden rounded-lg border border-border bg-card">
           <table className="w-full min-w-[640px] text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/60 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -216,13 +390,13 @@ function ClaimReview() {
               ))}
             </tbody>
           </table>
-        </div>
+        </div>}
       </Section>
 
       <Section step={3} title="Completeness Findings" description="Whether the file contains everything required to decide.">
         <div className="grid gap-3 lg:grid-cols-2">
           {claim.completeness.map((f) => (
-            <FindingCard key={f.id} finding={f} />
+            <FindingSection key={f.id} finding={f} />
           ))}
         </div>
       </Section>
@@ -230,7 +404,7 @@ function ClaimReview() {
       <Section step={4} title="Consistency Findings" description="Whether the documents tell the same story.">
         <div className="grid gap-3 lg:grid-cols-2">
           {claim.consistency.map((f) => (
-            <FindingCard key={f.id} finding={f} />
+            <FindingSection key={f.id} finding={f} />
           ))}
         </div>
       </Section>
@@ -238,9 +412,10 @@ function ClaimReview() {
       <Section step={5} title="Policy Findings" description="Cover, limits and clause compliance.">
         <div className="grid gap-3 lg:grid-cols-2">
           {claim.policy.map((f) => (
-            <FindingCard key={f.id} finding={f} />
+            <FindingSection key={f.id} finding={f} />
           ))}
         </div>
+        <PolicyClauses clauses={policyClauses} />
       </Section>
 
       <Section step={6} title="Contradictions" description="Direct conflicts detected between two source documents.">
@@ -258,7 +433,7 @@ function ClaimReview() {
       </Section>
 
       <Section step={7} title="AI Recommendation">
-        <RecommendationCard recommendation={claim.recommendation} />
+        <Recommendation claim={claim} />
       </Section>
 
       <Section step={8} title="Investigator Decision">
