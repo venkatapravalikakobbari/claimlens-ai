@@ -40,7 +40,7 @@ export function ClaimsTable({ claims, caption }: { claims: AdaptedClaim[]; capti
                   <div className="text-xs text-muted-foreground">{claim.registration || "Registration unavailable"}</div>
                 </td>
                 <td className="px-5 py-4 text-right font-medium tabular-nums text-foreground">
-                  Unavailable from API
+                  {claim.amount == null ? "Unavailable from API" : `₹${claim.amount.toLocaleString("en-IN")}`}
                 </td>
                 <td className="px-5 py-4">
                   <StatusBadge status={claim.status} kind="decision" />

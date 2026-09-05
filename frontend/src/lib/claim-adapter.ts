@@ -1,5 +1,6 @@
 import type { Claim, DecisionStatus, Finding, FindingStatus } from "./mock-data";
 import type {
+  ClaimMetadata,
   ClaimReview,
   Contradiction as ApiContradiction,
   RuleFinding,
@@ -23,12 +24,35 @@ export type AdaptedContradiction = {
 export type AdaptedClaim = Omit<
   Claim,
   | "status"
+  | "amount"
+  | "incidentSummary"
+  | "incidentDate"
+  | "reportedDate"
+  | "location"
+  | "customer"
+  | "vehicle"
+  | "registration"
+  | "policyNumber"
   | "completeness"
   | "consistency"
   | "policy"
   | "contradictions"
   | "recommendation"
 > & {
+  amount: number | null;
+  customer: string;
+  vehicle: string;
+  vehicleYear: number | null;
+  registration: string;
+  policyNumber: string;
+  incidentDate: string;
+  reportedDate: string;
+  location: string;
+  incidentSummary: string;
+  incidentType: string;
+  driver: string;
+  drivingLicenceStatus: string;
+  reportedDamage: string[];
   status: AdaptedDecisionStatus | string;
   completeness: AdaptedFinding[];
   consistency: AdaptedFinding[];
@@ -98,20 +122,33 @@ function adaptContradiction(
   };
 }
 
+function joinVehicle(metadata: ClaimMetadata | null | undefined): string {
+  return [metadata?.vehicle_make, metadata?.vehicle_model]
+    .filter((value): value is string => Boolean(value))
+    .join(" ");
+}
+
 export function adaptClaimReview(review: ClaimReview): AdaptedClaim {
   const decision = mapDecisionStatus(review.recommendation);
+  const metadata = review.claim_metadata;
+  const reportedDamage = metadata?.reported_damage ?? [];
   return {
     id: review.claim_id,
-    customer: "",
-    vehicle: "",
-    registration: "",
-    policyNumber: "",
-    amount: 0,
+    customer: metadata?.customer_name ?? "",
+    vehicle: joinVehicle(metadata),
+    vehicleYear: metadata?.vehicle_year ?? null,
+    registration: metadata?.registration_number ?? "",
+    policyNumber: metadata?.policy_number ?? "",
+    amount: metadata?.claim_amount ?? null,
     status: decision,
-    incidentDate: "",
-    reportedDate: "",
-    location: "",
-    incidentSummary: "",
+    incidentDate: metadata?.incident_date ?? "",
+    reportedDate: metadata?.reported_date ?? "",
+    location: metadata?.incident_location ?? "",
+    incidentSummary: reportedDamage.join(", "),
+    incidentType: metadata?.incident_type ?? "",
+    driver: metadata?.driver ?? "",
+    drivingLicenceStatus: metadata?.driving_licence_status ?? "",
+    reportedDamage,
     surveyor: "",
     garage: "",
     documents: [],

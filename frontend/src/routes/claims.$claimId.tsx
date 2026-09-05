@@ -14,6 +14,7 @@ import {
   type AdaptedFinding,
 } from "@/lib/claim-adapter";
 import type { FindingStatus } from "@/lib/mock-data";
+import { formatINR } from "@/lib/mock-data";
 
 export const Route = createFileRoute("/claims/$claimId")({
   loader: async ({ params }) => {
@@ -129,11 +130,16 @@ function Section({
 function Overview({ claim }: { claim: AdaptedClaim }) {
   const rows: [string, string][] = [
     ["Policy number", claim.policyNumber || "Unavailable from API"],
-    ["Vehicle", claim.vehicle ? `${claim.vehicle} · ${claim.registration}` : "Unavailable from API"],
-    ["Claim amount", "Unavailable from API"],
+    ["Vehicle", claim.vehicle || "Unavailable from API"],
+    ["Registration", claim.registration || "Unavailable from API"],
+    ["Vehicle year", claim.vehicleYear ? String(claim.vehicleYear) : "Unavailable from API"],
+    ["Claim amount", claim.amount == null ? "Unavailable from API" : formatINR(claim.amount)],
     ["Incident date", claim.incidentDate || "Unavailable from API"],
     ["Reported date", claim.reportedDate || "Unavailable from API"],
     ["Loss location", claim.location || "Unavailable from API"],
+    ["Incident type", claim.incidentType || "Unavailable from API"],
+    ["Driver", claim.driver || "Unavailable from API"],
+    ["Driving licence", claim.drivingLicenceStatus || "Unavailable from API"],
     ["Surveyor", claim.surveyor || "Unavailable from API"],
     ["Repair garage", claim.garage || "Unavailable from API"],
   ];
@@ -150,7 +156,9 @@ function Overview({ claim }: { claim: AdaptedClaim }) {
       <div className="border-t border-border px-4 py-4">
         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Incident summary</p>
         <p className="mt-1.5 text-sm leading-relaxed text-foreground">
-          {claim.incidentSummary || "Unavailable from API"}
+          {claim.incidentSummary
+            ? `${claim.incidentType ? `${claim.incidentType}. ` : ""}Reported damage: ${claim.incidentSummary}.`
+            : "Unavailable from API"}
         </p>
       </div>
     </div>

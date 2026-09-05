@@ -21,7 +21,9 @@ export function ClaimCard({ claim }: { claim: AdaptedClaim }) {
       <dl className="mt-4 grid grid-cols-2 gap-3 border-t border-border pt-4 text-sm">
         <div>
           <dt className="text-xs text-muted-foreground">Claim amount</dt>
-          <dd className="font-medium tabular-nums text-foreground">Unavailable from API</dd>
+          <dd className="font-medium tabular-nums text-foreground">
+            {claim.amount == null ? "Unavailable from API" : `₹${claim.amount.toLocaleString("en-IN")}`}
+          </dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">Contradictions</dt>
